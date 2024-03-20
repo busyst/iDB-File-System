@@ -25,11 +25,11 @@ public class DummyEncryptionHandler
     private readonly byte[] substitutionTable = new byte[256];
     private readonly byte[] offsetTable = new byte[64];
     private readonly uint internalOffset; 
-    public class Encryptor(DummyEncryptionHandler eh) : IDisposable
+    public class DummyEncryptor(DummyEncryptionHandler eh) : Encryptor
     {
         public uint internalOffset = eh.internalOffset;
         private byte[] buffer = [];
-        public Memory<byte> Encrypt(ReadOnlySpan<byte> input)
+        public override Memory<byte> Encrypt(ReadOnlySpan<byte> input)
         {
             var length = input.Length;
             if (length > buffer.Length)
@@ -49,17 +49,17 @@ public class DummyEncryptionHandler
             return buffer.AsMemory(0,length);
         }
 
-        public void Dispose()
+        public override void Dispose()
         {
             buffer = [];
             GC.SuppressFinalize(this);
         }
     }
-    public class Decryptor(DummyEncryptionHandler eh) : IDisposable
+    public class DummyDecryptor(DummyEncryptionHandler eh) : Decryptor
     {
         public uint internalOffset = eh.internalOffset;
         private byte[] buffer = [];
-        public Memory<byte> Decrypt(ReadOnlySpan<byte> input)
+        public override Memory<byte> Decrypt(ReadOnlySpan<byte> input)
         {
             var length = input.Length;
             if (length > buffer.Length)
@@ -85,7 +85,7 @@ public class DummyEncryptionHandler
             return buffer.AsMemory(0,length);
         }
 
-        public void Dispose()
+        public override void Dispose()
         {
             buffer = [];
             GC.SuppressFinalize(this);

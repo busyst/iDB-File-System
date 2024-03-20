@@ -1,4 +1,5 @@
 using System.Text;
+using JD.Security;
 
 public class DirectoryBlock(SuperBlock sb, long block) : IBlock(block)
 {
@@ -205,7 +206,7 @@ class FileSystem(string path)
     {
         fs = new FileStream(path, FileMode.Open, FileAccess.ReadWrite, FileShare.Read);
         sb = new SuperBlock(fs);
-        System.Console.WriteLine($"Blocks:{sb.Blocks}, occ:{sb.MemoryBlocks}");
+        Console.WriteLine($"Blocks:{sb.Blocks}, res:{sb.MemoryBlocks/SuperBlock.BlockSize} {(((double)sb.MemoryBlocks/SuperBlock.BlockSize)/sb.Blocks):0.00}%");
         var occ = (sb.MemoryBlocks/SuperBlock.BlockSize);
         for (long i = 0; i < sb.Blocks; i++)
         {  
@@ -222,8 +223,30 @@ class FileSystem(string path)
     {
         fs = new FileStream(path, FileMode.Open, FileAccess.ReadWrite, FileShare.Read);
         sb = new SuperBlock(fs);
-        Console.WriteLine($"Blocks:{sb.Blocks}, occ:{sb.MemoryBlocks}");
+        Console.WriteLine($"Blocks:{sb.Blocks}, res:{sb.MemoryBlocks/SuperBlock.BlockSize} {(((double)sb.MemoryBlocks/SuperBlock.BlockSize)/sb.Blocks):0.00}%");
         mainBlock = new DirectoryBlock(sb, sb.MemoryBlocks/SuperBlock.BlockSize);
+    }
+    public FileBlock AddFile(string path,DirectoryBlock dirb,Encryptor encr)
+    {
+        if(!File.Exists(path))
+            throw new FileNotFoundException(path);
+        
+        var blk = sb.FindAndOccupyFreeBlock();
+        sb.ClearBlock(blk);
+        var metadata = new BlockMetadata{
+            Type = BlockMetadata.BlockType.File
+        };
+        var date = DateTime.UtcNow.Ticks;
+        var file = new FileBlock(blk,sb){
+            Name = Path.GetFileName(path),
+            CreateDate = date,
+            LastModifyDate = date,
+        };
+        dirb.AddBlock(file,metadata);
+        using var f = File.OpenRead(path);
+        file.AllocateBlocks(f);
+        file.EncryptedWriteDataToAllocatedBlocks(f,encr);
+        return file;
     }
     public FileBlock AddFile(string path,DirectoryBlock dirb)
     {
@@ -244,7 +267,8 @@ class FileSystem(string path)
         };
         dirb.AddBlock(file,metadata);
         using var f = File.OpenRead(path);
-        file.AllocateData(sb,f);
+        file.AllocateBlocks(f);
+        file.WriteDataToAllocatedBlocks(f);
         return file;
     }
     public DirectoryBlock AddDirectory(string name)

@@ -1,4 +1,6 @@
 using System.Text;
+using JD.Security;
+using JD.Security.Dummy;
 
 public abstract class IBlock(long pointer){
     public readonly long BlockPointer = pointer;
@@ -54,7 +56,7 @@ public class FileBlock(long pointer,SuperBlock sb) : ExtensionBlock(pointer)
     #endregion
     public const int metadataoffset = 256+sizeof(long)+sizeof(long)+sizeof(byte)+sizeof(long)+sizeof(uint);
     public override long MaxAddreses => ((SuperBlock.BlockSize-metadataoffset)/sizeof(long))-1;
-    public void AllocateData(SuperBlock sb, Stream data)
+    public void AllocateBlocks(Stream data)
     {
         Length = data.Length;
         BlocksCount = (uint)Math.Ceiling(((double)data.Length)/SuperBlock.BlockSize);
@@ -75,11 +77,13 @@ public class FileBlock(long pointer,SuperBlock sb) : ExtensionBlock(pointer)
                 sb.ClearBlock(currentBlock.BlockPointer);
             }
         }
-        //System.Console.WriteLine($"Occupied {sb.WritesDelta-faf} we | {allocated} woe blocks");
-        //System.Console.WriteLine($"Predicted {BlocksCount} + extentions");
-
-        needToAllocate = BlocksCount;
-        currentBlock = this;
+        /*System.Console.WriteLine($"Occupied {sb.WritesDelta-faf} we | {allocated} woe blocks");
+        System.Console.WriteLine($"Predicted {BlocksCount} + extentions");*/
+    }
+    public void WriteDataToAllocatedBlocks(Stream data)
+    {
+        var needToAllocate = BlocksCount;
+        ExtensionBlock currentBlock = this;
         byte[] buffer = new byte[SuperBlock.BlockSize];
         while (needToAllocate!=0)
         {
@@ -95,33 +99,26 @@ public class FileBlock(long pointer,SuperBlock sb) : ExtensionBlock(pointer)
                 currentBlock = new ExtensionBlock(currentBlock.GetExtentionBlock(sb));
         }
     }
-    public byte[] ReadData(SuperBlock sb)   
+    public void EncryptedWriteDataToAllocatedBlocks(Stream data,Encryptor encryptor)
     {
-        byte[] data = new byte[Length];
-
-        var currentBlock = (ExtensionBlock)this;
         var needToAllocate = BlocksCount;
-        var last = Length;
-        var offset = 0;
+        ExtensionBlock currentBlock = this;
+        byte[] buffer = new byte[SuperBlock.BlockSize];
         while (needToAllocate!=0)
         {
             var allocate = (uint)Math.Min(needToAllocate,currentBlock.MaxAddreses);
             for (int i = 0; i < allocate; i++)
             {
                 var c = currentBlock.GetAddress(sb,i);
-                sb.ReadFromBlock(c,0,(int)Math.Min(last,SuperBlock.BlockSize)).CopyTo(data,offset);
-                offset+=(int)SuperBlock.BlockSize;
-                last-=(int)SuperBlock.BlockSize;
-                if(last==0)
-                    return data;
+                int l = data.Read(buffer);
+                sb.WriteToBlock(c,0,encryptor.Encrypt(buffer)[..l].Span);
             }
             needToAllocate-=allocate;
             if(needToAllocate!=0)
                 currentBlock = new ExtensionBlock(currentBlock.GetExtentionBlock(sb));
         }
-        return data;
     }
-    public void ReadData(SuperBlock sb, Stream stream)
+    public void ReadData(Stream stream)
     {
         var currentBlock = (ExtensionBlock)this;
         var needToAllocate = BlocksCount;
@@ -142,7 +139,29 @@ public class FileBlock(long pointer,SuperBlock sb) : ExtensionBlock(pointer)
                 currentBlock = new ExtensionBlock(currentBlock.GetExtentionBlock(sb));
         }
     }
-
+    public void EncryptedReadData(Stream stream,Decryptor decryptor)
+    {
+        var currentBlock = (ExtensionBlock)this;
+        var needToAllocate = BlocksCount;
+        var last = Length;
+        while (needToAllocate!=0)
+        {
+            var allocate = (uint)Math.Min(needToAllocate,currentBlock.MaxAddreses);
+            for (int i = 0; i < allocate; i++)
+            {
+                var c = currentBlock.GetAddress(sb,i);
+                var l = (int)Math.Min(last,SuperBlock.BlockSize);
+                var red = sb.ReadFromBlock(c,0,SuperBlock.BlockSize);
+                stream.Write(decryptor.Decrypt(red)[..l].Span);
+                last-=(int)SuperBlock.BlockSize;
+                if(last==0)
+                    return;
+            }
+            needToAllocate-=allocate;
+            if(needToAllocate!=0)
+                currentBlock = new ExtensionBlock(currentBlock.GetExtentionBlock(sb));
+        }
+    }
     public override long GetAddress(SuperBlock sb, int i){
         var offs = metadataoffset+(sizeof(long)-(metadataoffset%sizeof(long)))+(i*sizeof(long));
         var data = sb.ReadFromBlock(base.BlockPointer,offs,sizeof(long));
