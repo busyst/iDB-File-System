@@ -8,15 +8,9 @@ public class SuperBlock
     private readonly FileStream _fs;
     private readonly long _blocks;
     private readonly long _memoryBlocks;
-    public const long BlockSize = 4096;
     private readonly long ReservedBlocks;
-    // Constructors
-    /// <summary>
-    /// Initializes a new instance of the SuperBlock class with the provided FileStream.
-    /// </summary>
-    /// <param name="fs">The FileStream representing the file system.</param>
-    /// <exception cref="ArgumentNullException">Thrown when fs is null.</exception>
-    /// <exception cref="ArgumentException">Thrown when the drive size is not a multiple of the block size.</exception>
+    
+    public const long BlockSize = 4096;
     public SuperBlock(FileStream fs)
     {
         _fs = fs ?? throw new ArgumentNullException(nameof(fs));
@@ -29,14 +23,6 @@ public class SuperBlock
         _memoryBlocks = _blocks / 8; // Assuming each block occupies 8 bytes in memory
         ReservedBlocks = _memoryBlocks/BlockSize;
     }
-    // Methods
-    /// <summary>
-    /// Checks if a block at the specified position is occupied.
-    /// </summary>
-    /// <param name="position">The position of the block to check.</param>
-    /// <returns>True if the block is occupied, otherwise false.</returns>
-    /// <exception cref="ArgumentOutOfRangeException">Thrown when the position is out of range.</exception>
-    /// <exception cref="EndOfStreamException">Thrown when the end of the stream is reached while reading.</exception>
     public bool IsOccupied(long position)
     {
         if (position < 0 || position >= _blocks)
@@ -49,13 +35,6 @@ public class SuperBlock
 
         return (currentByte & (1 << (int)(position % 8))) != 0;
     }
-    /// <summary>
-    /// Sets the occupancy state of a block at the specified position.
-    /// </summary>
-    /// <param name="position">The position of the block to set occupancy state for.</param>
-    /// <param name="state">The occupancy state to set.</param>
-    /// <exception cref="ArgumentOutOfRangeException">Thrown when the position is out of range.</exception>
-    /// <exception cref="EndOfStreamException">Thrown when the end of the stream is reached while reading.</exception>
     public void SetOccupancy(long position, bool state)
     {
         if (position < 0 || position >= _blocks)
@@ -88,11 +67,6 @@ public class SuperBlock
             WritesDelta++;
         }
     }
-    /// <summary>
-    /// Finds a free block within the file system.
-    /// </summary>
-    /// <returns>The position of the free block.</returns>
-    /// <exception cref="Exception">Thrown when the drive is full.</exception>
     public long FindFreeBlock()
     {
         for (int i = 0; i < 16; i++)
@@ -105,6 +79,16 @@ public class SuperBlock
             if(!IsOccupied(i))
                 return i; 
         throw new Exception("Drive is full!");
+    }
+    public long FindAndOccupyFreeBlock()
+    {
+        var blk = FindFreeBlock();
+        SetOccupancy(blk,true);
+        return blk;
+    }
+    public void ClearBlock(long block)
+    {
+        WriteToBlock(block,0,new byte[BlockSize]);
     }
 
     public void WriteToBlock(long block,int offset,ReadOnlySpan<byte> bytes)
@@ -122,7 +106,7 @@ public class SuperBlock
         _fs.Write(bytes);
         _fs.Flush();
     }
-    public byte[] ReadFromBlock(long block, int offset, int length)
+    public byte[] ReadFromBlock(long block, int offset, long length)
     {
         if(block<ReservedBlocks)
             throw new Exception($"This block [{block}] reserved for system needs!");
