@@ -245,7 +245,7 @@ class FileSystem(string path)
         dirb.AddBlock(file,metadata);
         using var f = File.OpenRead(path);
         file.AllocateBlocks(f);
-        file.EncryptedWriteDataToAllocatedBlocks(f,encr);
+        file.WriteDataToAllocatedBlocks(f,encr);
         return file;
     }
     public FileBlock AddFile(string path,DirectoryBlock dirb)

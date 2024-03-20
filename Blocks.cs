@@ -1,6 +1,5 @@
 using System.Text;
 using JD.Security;
-using JD.Security.Dummy;
 
 public abstract class IBlock(long pointer){
     public readonly long BlockPointer = pointer;
@@ -99,7 +98,7 @@ public class FileBlock(long pointer,SuperBlock sb) : ExtensionBlock(pointer)
                 currentBlock = new ExtensionBlock(currentBlock.GetExtentionBlock(sb));
         }
     }
-    public void EncryptedWriteDataToAllocatedBlocks(Stream data,Encryptor encryptor)
+    public void WriteDataToAllocatedBlocks(Stream data,Encryptor encryptor)
     {
         var needToAllocate = BlocksCount;
         ExtensionBlock currentBlock = this;
@@ -139,7 +138,7 @@ public class FileBlock(long pointer,SuperBlock sb) : ExtensionBlock(pointer)
                 currentBlock = new ExtensionBlock(currentBlock.GetExtentionBlock(sb));
         }
     }
-    public void EncryptedReadData(Stream stream,Decryptor decryptor)
+    public void ReadData(Stream stream,Decryptor decryptor)
     {
         var currentBlock = (ExtensionBlock)this;
         var needToAllocate = BlocksCount;
